@@ -1,5 +1,11 @@
 from tkinter import Tk, Button, Label, filedialog
 from PyPDF2 import PdfReader
+import pymupdf
+import pytesseract
+from PIL import Image
+from io import BytesIO
+
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 selected_files = []
 
@@ -16,14 +22,32 @@ def select_pdfs():
 def extract_text():
     for pdf_file in selected_files:
         reader = PdfReader(pdf_file)
+        pdf_document = pymupdf.open(pdf_file)
 
         text = ""
 
-        for page in reader.pages:
+        for page_number, page in enumerate(reader.pages):
             page_text = page.extract_text()
 
-            if page_text:
+            if page_text and page_text.strip():
                 text += page_text + "\n"
+
+            else:
+                pdf_page = pdf_document[page_number]
+
+                pix = pdf_page.get_pixmap(
+                    matrix=pymupdf.Matrix(2, 2)
+                )
+
+                image = Image.open(
+                    BytesIO(pix.tobytes("png"))
+                )
+
+                ocr_text = pytesseract.image_to_string(image)
+
+                text += ocr_text + "\n"
+
+        pdf_document.close()
 
         output_file = pdf_file.replace(".pdf", ".txt")
 
@@ -33,12 +57,14 @@ def extract_text():
             else:
                 file.write(
                     "No readable text was found in this PDF.\n\n"
-                    "This PDF may contain scanned pages or images instead of selectable text. "
-                    "Image-based PDFs require OCR (Optical Character Recognition) to extract their text."
+                    "The program attempted both normal text extraction "
+                    "and OCR, but no text could be recognized."
                 )
 
-    status_label.config(text=f"Done! {len(selected_files)} PDF(s) processed.")
-    
+    status_label.config(
+        text=f"Done! {len(selected_files)} PDF(s) processed."
+    )
+
 window = Tk()
 window.title("PDF Text Scraper")
 window.geometry("400x250")
